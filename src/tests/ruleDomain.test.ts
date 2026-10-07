@@ -54,6 +54,29 @@ describe('rule consistency analysis', () => {
     expect(analysis.checkedCases).toBeGreaterThan(0);
   });
 
+  it('preserves exact overlap witnesses when rules share non-adjacent fields', () => {
+    const levelField: RuleField = { id: 'level', name: '等级', type: 'enum', enumValues: ['basic', 'gold', 'platinum'] };
+    const scoreField: RuleField = { id: 'score', name: '评分', type: 'number', min: 0, max: 10 };
+    const rules = [
+      makeRule('broad', { kind: 'group', operator: 'and', conditions: [
+        { kind: 'predicate', fieldId: 'score', operator: 'gte', value: 6 },
+      ] }, 10, 'A'),
+      makeRule('specific', { kind: 'group', operator: 'and', conditions: [
+        { kind: 'predicate', fieldId: 'score', operator: 'gte', value: 6 },
+        { kind: 'predicate', fieldId: 'score', operator: 'lte', value: 8 },
+      ] }, 5, 'B'),
+    ];
+    const analysis = analyzeRules(project(rules, [levelField, scoreField]));
+    expect(analysis.overlaps).toEqual([
+      expect.objectContaining({
+        ruleAId: 'broad',
+        ruleBId: 'specific',
+        witness: { level: 'basic', score: 6 },
+      }),
+    ]);
+    expect(analysis.shadowedRuleIds).toEqual(['specific']);
+  });
+
   it('evaluates OR groups and validates missing sample inputs precisely', () => {
     const rule = makeRule('either', { kind: 'group', operator: 'or', conditions: [
       { kind: 'predicate', fieldId: 'tier', operator: 'eq', value: 'gold' },
